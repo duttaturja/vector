@@ -1,92 +1,96 @@
-from OpenGL.GL import *
 import numpy as np
+from OpenGL.GL import *
 from PIL import Image
 
+def ray_triangle_intersect(orig, dir, v0, v1, v2):
+    eps = 1e-6
+    edge1 = v1 - v0
+    edge2 = v2 - v0
+    h = np.cross(dir, edge2)
+    a = np.dot(edge1, h)
+    if -eps < a < eps:
+        return False
+    f = 1.0 / a
+    s = orig - v0
+    u = f * np.dot(s, h)
+    if u < 0.0 or u > 1.0:
+        return False
+    q = np.cross(s, edge1)
+    v = f * np.dot(dir, q)
+    if v < 0.0 or u + v > 1.0:
+        return False
+    t = f * np.dot(edge2, q)
+    return t > eps
+
 class Mesh:
-    def __init__(self, vertices, indices, normals=None, texcoords=None):
-        self.vertices = np.array(vertices, dtype=np.float32)
-        self.indices = np.array(indices, dtype=np.uint32)
-        self.normals = np.array(normals, dtype=np.float32) if normals else None
-        self.texcoords = np.array(texcoords, dtype=np.float32) if texcoords else None
+    def __init__(self, vertices, indices, normals):
+        self.vertices = np.array(vertices)
+        self.indices = indices
+        self.normals = normals if normals else None
+        self.selected = False
         self.texture_id = None
 
     def load_texture(self, path):
-        image = Image.open(path)
-        image = image.transpose(Image.FLIP_TOP_BOTTOM)
-        img_data = image.convert("RGBA").tobytes()
+        img = Image.open(path)
+        img = img.transpose(Image.FLIP_TOP_BOTTOM)
+        img_data = np.array(img, dtype=np.uint8)
 
         self.texture_id = glGenTextures(1)
         glBindTexture(GL_TEXTURE_2D, self.texture_id)
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.width, image.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, img_data)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-        glBindTexture(GL_TEXTURE_2D, 0)
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, img.width, img.height, 0, GL_RGB, GL_UNSIGNED_BYTE, img_data)
+        glGenerateMipmap(GL_TEXTURE_2D)
 
     def draw(self):
-        if self.texcoords is not None and self.texture_id is not None:
+        if self.texture_id:
             glEnable(GL_TEXTURE_2D)
             glBindTexture(GL_TEXTURE_2D, self.texture_id)
 
-        glEnableClientState(GL_VERTEX_ARRAY)
-        glVertexPointer(3, GL_FLOAT, 0, self.vertices)
+        glBegin(GL_TRIANGLES)
+        for i in self.indices:
+            if self.normals and i < len(self.normals):
+                glNormal3fv(self.normals[i])
+            if self.selected:
+                glColor3f(1.0, 0.0, 0.0)  # red if selected
+            else:
+                glColor3f(1.0, 1.0, 1.0)  # white if not
+            glVertex3fv(self.vertices[i])
+        glEnd()
 
-        if self.normals is not None:
-            glEnableClientState(GL_NORMAL_ARRAY)
-            glNormalPointer(GL_FLOAT, 0, self.normals)
-
-        if self.texcoords is not None:
-            glEnableClientState(GL_TEXTURE_COORD_ARRAY)
-            glTexCoordPointer(2, GL_FLOAT, 0, self.texcoords)
-
-        glDrawElements(GL_TRIANGLES, len(self.indices), GL_UNSIGNED_INT, self.indices)
-
-        glDisableClientState(GL_VERTEX_ARRAY)
-        if self.normals is not None:
-            glDisableClientState(GL_NORMAL_ARRAY)
-        if self.texcoords is not None:
-            glDisableClientState(GL_TEXTURE_COORD_ARRAY)
-        if self.texcoords is not None and self.texture_id is not None:
-            glBindTexture(GL_TEXTURE_2D, 0)
+        if self.texture_id:
             glDisable(GL_TEXTURE_2D)
 
-def load_obj(filepath):
-    temp_vertices = []
-    temp_normals = []
-    temp_texcoords = []
-    vertex_indices = []
-    normal_indices = []
-    texcoord_indices = []
+    def intersect_ray(self, origin, direction):
+        print("Checking intersection...")
+        for i in range(0, len(self.indices), 3):
+            v0 = self.vertices[self.indices[i]]
+            v1 = self.vertices[self.indices[i + 1]]
+            v2 = self.vertices[self.indices[i + 2]]
+            if ray_triangle_intersect(origin, direction, v0, v1, v2):
+                return True
+        return False
 
-    with open(filepath, 'r') as file:
-        for line in file:
+def load_obj(path):
+    vertices = []
+    normals = []
+    indices = []
+
+    with open(path, 'r') as f:
+        for line in f:
             if line.startswith('v '):
-                parts = line.strip().split()
-                temp_vertices.append([float(parts[1]), float(parts[2]), float(parts[3])])
+                vertices.append(list(map(float, line.strip().split()[1:])))
             elif line.startswith('vn '):
-                parts = line.strip().split()
-                temp_normals.append([float(parts[1]), float(parts[2]), float(parts[3])])
-            elif line.startswith('vt '):
-                parts = line.strip().split()
-                temp_texcoords.append([float(parts[1]), float(parts[2])])
+                normals.append(list(map(float, line.strip().split()[1:])))
             elif line.startswith('f '):
-                parts = line.strip().split()[1:]
-                for part in parts:
-                    vals = part.split('/')
-                    v_idx = int(vals[0]) - 1
-                    t_idx = int(vals[1]) - 1 if len(vals) > 1 and vals[1] != '' else None
-                    n_idx = int(vals[2]) - 1 if len(vals) > 2 and vals[2] != '' else None
+                face = line.strip().split()[1:]
+                for vertex in face:
+                    if '//' in vertex:
+                        parts = vertex.split('//')
+                        idx = int(parts[0]) - 1
+                    elif '/' in vertex:
+                        parts = vertex.split('/')
+                        idx = int(parts[0]) - 1
+                    else:
+                        idx = int(vertex) - 1
+                    indices.append(idx)
 
-                    vertex_indices.append(v_idx)
-                    if t_idx is not None:
-                        texcoord_indices.append(t_idx)
-                    if n_idx is not None:
-                        normal_indices.append(n_idx)
-
-    vertices = [coord for idx in vertex_indices for coord in temp_vertices[idx]]
-    normals = [coord for idx in normal_indices for coord in temp_normals[idx]] if normal_indices else None
-    texcoords = [coord for idx in texcoord_indices for coord in temp_texcoords[idx]] if texcoord_indices else None
-    indices = list(range(len(vertex_indices)))
-
-    return Mesh(vertices, indices, normals, texcoords)
+    return Mesh(vertices, indices, normals)

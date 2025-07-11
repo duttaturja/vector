@@ -27,13 +27,28 @@ def init_window():
     glClearColor(0.2, 0.3, 0.3, 1.0)
     return window
 
+def get_ray_from_mouse(x, y, view_matrix, projection_matrix):
+    x = (2.0 * x) / WIDTH - 1.0
+    y = 1.0 - (2.0 * y) / HEIGHT
+    ray_nds = np.array([x, y, -1.0, 1.0])
+
+    inv_proj = np.linalg.inv(projection_matrix)
+    eye_coords = inv_proj @ ray_nds
+    eye_coords = np.array([eye_coords[0], eye_coords[1], -1.0, 0.0])
+
+    inv_view = np.linalg.inv(view_matrix)
+    world_coords = inv_view @ eye_coords
+    ray_dir = world_coords[:3]
+    ray_dir = ray_dir / np.linalg.norm(ray_dir)
+    return ray_dir
+
 def main():
     window = init_window()
     camera = Camera()
     glfw.set_input_mode(window, glfw.CURSOR, glfw.CURSOR_DISABLED)
 
     mesh = load_obj("models/cube.obj")
-    mesh.load_texture("textures/Bricks019_2K-JPG_Color.jpg")  # Replace with your actual texture path
+    mesh.load_texture("textures/Bricks019_2K-JPG_Color.jpg")
 
     def mouse_callback(window, xpos, ypos):
         if camera.first_mouse:
@@ -51,8 +66,28 @@ def main():
     def scroll_callback(window, xoffset, yoffset):
         camera.process_scroll(yoffset)
 
+    def mouse_button_callback(window, button, action, mods):
+        if button == glfw.MOUSE_BUTTON_LEFT and action == glfw.PRESS:
+            xpos, ypos = glfw.get_cursor_pos(window)
+
+            glMatrixMode(GL_PROJECTION)
+            glPushMatrix()
+            glLoadIdentity()
+            gluPerspective(camera.zoom, WIDTH / HEIGHT, 0.1, 100.0)
+            projection = glGetDoublev(GL_PROJECTION_MATRIX).T
+            glPopMatrix()
+
+            view = camera.get_view_matrix()
+            ray_dir = get_ray_from_mouse(xpos, ypos, view, projection)
+            ray_origin = camera.position
+
+            if mesh.intersect_ray(ray_origin, ray_dir):
+                mesh.selected = not mesh.selected
+                print("Mesh selected:", mesh.selected)
+
     glfw.set_cursor_pos_callback(window, mouse_callback)
     glfw.set_scroll_callback(window, scroll_callback)
+    glfw.set_mouse_button_callback(window, mouse_button_callback)
 
     last_frame = time.time()
 
