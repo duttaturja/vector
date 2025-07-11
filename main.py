@@ -2,9 +2,9 @@ import glfw
 from OpenGL.GL import *
 from OpenGL.GLU import gluPerspective
 import numpy as np
-import time
 from camera import Camera
-from mesh import Mesh, load_obj
+from mesh import load_obj
+import time
 
 WIDTH, HEIGHT = 800, 600
 
@@ -19,18 +19,13 @@ def init_window():
 
     glfw.make_context_current(window)
     glEnable(GL_DEPTH_TEST)
+    glEnable(GL_LIGHTING)
+    glEnable(GL_LIGHT0)
+    glLightfv(GL_LIGHT0, GL_POSITION,  (0.5, 1.0, 0.3, 0.0))
+    glLightfv(GL_LIGHT0, GL_AMBIENT,   (0.2, 0.2, 0.2, 1.0))
+    glLightfv(GL_LIGHT0, GL_DIFFUSE,   (0.8, 0.8, 0.8, 1.0))
     glClearColor(0.2, 0.3, 0.3, 1.0)
     return window
-
-def process_input(window, camera, delta_time):
-    if glfw.get_key(window, glfw.KEY_W) == glfw.PRESS:
-        camera.process_keyboard("FORWARD", delta_time)
-    if glfw.get_key(window, glfw.KEY_S) == glfw.PRESS:
-        camera.process_keyboard("BACKWARD", delta_time)
-    if glfw.get_key(window, glfw.KEY_A) == glfw.PRESS:
-        camera.process_keyboard("LEFT", delta_time)
-    if glfw.get_key(window, glfw.KEY_D) == glfw.PRESS:
-        camera.process_keyboard("RIGHT", delta_time)
 
 def main():
     window = init_window()
@@ -44,10 +39,12 @@ def main():
             camera.last_x = xpos
             camera.last_y = ypos
             camera.first_mouse = False
+
         xoffset = xpos - camera.last_x
         yoffset = camera.last_y - ypos
         camera.last_x = xpos
         camera.last_y = ypos
+
         camera.process_mouse_movement(xoffset, yoffset)
 
     def scroll_callback(window, xoffset, yoffset):
@@ -56,15 +53,23 @@ def main():
     glfw.set_cursor_pos_callback(window, mouse_callback)
     glfw.set_scroll_callback(window, scroll_callback)
 
-    last_frame_time = time.time()
+    last_frame = time.time()
 
     while not glfw.window_should_close(window):
-        current_frame_time = time.time()
-        delta_time = current_frame_time - last_frame_time
-        last_frame_time = current_frame_time
+        current_frame = time.time()
+        delta_time = current_frame - last_frame
+        last_frame = current_frame
 
         glfw.poll_events()
-        process_input(window, camera, delta_time)
+
+        if glfw.get_key(window, glfw.KEY_W) == glfw.PRESS:
+            camera.process_keyboard("FORWARD", delta_time)
+        if glfw.get_key(window, glfw.KEY_S) == glfw.PRESS:
+            camera.process_keyboard("BACKWARD", delta_time)
+        if glfw.get_key(window, glfw.KEY_A) == glfw.PRESS:
+            camera.process_keyboard("LEFT", delta_time)
+        if glfw.get_key(window, glfw.KEY_D) == glfw.PRESS:
+            camera.process_keyboard("RIGHT", delta_time)
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
