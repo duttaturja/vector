@@ -2,6 +2,7 @@ import glfw
 from OpenGL.GL import *
 from OpenGL.GLU import gluPerspective
 import numpy as np
+import time
 from camera import Camera
 from mesh import Mesh, load_obj
 
@@ -21,15 +22,23 @@ def init_window():
     glClearColor(0.2, 0.3, 0.3, 1.0)
     return window
 
+def process_input(window, camera, delta_time):
+    if glfw.get_key(window, glfw.KEY_W) == glfw.PRESS:
+        camera.process_keyboard("FORWARD", delta_time)
+    if glfw.get_key(window, glfw.KEY_S) == glfw.PRESS:
+        camera.process_keyboard("BACKWARD", delta_time)
+    if glfw.get_key(window, glfw.KEY_A) == glfw.PRESS:
+        camera.process_keyboard("LEFT", delta_time)
+    if glfw.get_key(window, glfw.KEY_D) == glfw.PRESS:
+        camera.process_keyboard("RIGHT", delta_time)
+
 def main():
     window = init_window()
     camera = Camera()
     glfw.set_input_mode(window, glfw.CURSOR, glfw.CURSOR_DISABLED)
 
-    # Load mesh from .obj file
     mesh = load_obj("models/cube.obj")
 
-    # Callbacks
     def mouse_callback(window, xpos, ypos):
         if camera.first_mouse:
             camera.last_x = xpos
@@ -47,8 +56,16 @@ def main():
     glfw.set_cursor_pos_callback(window, mouse_callback)
     glfw.set_scroll_callback(window, scroll_callback)
 
+    last_frame_time = time.time()
+
     while not glfw.window_should_close(window):
+        current_frame_time = time.time()
+        delta_time = current_frame_time - last_frame_time
+        last_frame_time = current_frame_time
+
         glfw.poll_events()
+        process_input(window, camera, delta_time)
+
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
         glMatrixMode(GL_PROJECTION)
