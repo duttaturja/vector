@@ -33,6 +33,7 @@ def main():
     glfw.set_input_mode(window, glfw.CURSOR, glfw.CURSOR_DISABLED)
 
     mesh = load_obj("models/cube.obj")
+    mesh.load_texture("textures/Bricks019_2K-JPG_Color.jpg")  # Replace with your actual texture path
 
     def mouse_callback(window, xpos, ypos):
         if camera.first_mouse:
